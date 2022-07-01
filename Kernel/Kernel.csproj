@@ -1,0 +1,62 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net6.0</TargetFramework>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+
+    <NoStdLib>true</NoStdLib>
+    <NoConfig>true</NoConfig>
+    <RuntimeMetadataVersion>v4.0.30319</RuntimeMetadataVersion>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
+	<IlcSystemModule>Kernel</IlcSystemModule>
+	<EntryPointSymbol>Main</EntryPointSymbol>
+	<LinkerSubsystem>NATIVE</LinkerSubsystem>
+  </PropertyGroup>
+
+  <Target Name="SetArch" BeforeTargets="IlcCompile">
+	  <PropertyGroup>
+		  <InputFile>$(NativeIntermediateOutputPath)$(TargetName).ilc.rsp</InputFile>
+		  <OutputFile>$(NativeIntermediateOutputPath)$(TargetName).ilc.rsp</OutputFile>
+	  </PropertyGroup>
+	  <WriteLinesToFile File="$(OutputFile)" Lines="$([System.IO.File]::ReadAllText($(InputFile)).Replace('--targetarch:x64','--targetarch:x86'))" Overwrite="true" Encoding="Unicode" />
+  </Target>
+
+  <ItemGroup>
+	  <LinkerArg Include="/fixed /base:0x200000 /filealign:0x1000 /map:Kernel.map" />
+  </ItemGroup>
+
+  <Target Name="BuildISO" AfterTargets="Publish">
+	  <Exec WorkingDirectory="$(MSBuildStartupDirectory)\Tools\" Command="&quot;$(MSBuildStartupDirectory)\Tools\nasm.exe&quot; -fbin &quot;$(MSBuildStartupDirectory)\Tools\EntryPoint.asm&quot; -o &quot;$(MSBuildProjectDirectory)\$(NativeOutputPath)entry&quot;"></Exec>
+	  <Exec Command="cmd.exe /c copy /b &quot;$(MSBuildProjectDirectory)\$(NativeOutputPath)entry&quot;+&quot;$(MSBuildProjectDirectory)\$(NativeOutputPath)$(TargetName)$(NativeBinaryExt)&quot; &quot;$(MSBuildStartupDirectory)\Tools\grub2\boot\kernel&quot;"></Exec>
+	  <Delete Files="&quot;$(MSBuildProjectDirectory)\$(NativeOutputPath)entry&quot;"></Delete>
+	  <Exec Command="&quot;$(MSBuildStartupDirectory)\Tools\mkisofs.exe&quot; -relaxed-filenames -J -R -o &quot;$(MSBuildProjectDirectory)\$(NativeOutputPath)$(TargetName).iso&quot; -b boot/grub/i386-pc/eltorito.img -no-emul-boot -boot-load-size 4 -boot-info-table &quot;$(MSBuildStartupDirectory)\Tools\grub2&quot;"></Exec>
+  </Target>
+
+  <Target Name="RunQemu" AfterTargets="BuildISO">
+      <Error Text="Please install QEMU in order to debug https://www.qemu.org/download/#windows" Condition="!Exists('C:\Program Files\qemu\qemu-system-x86_64.exe')"></Error>
+	  
+	  <Exec Command="&quot;C:\\Program Files\\qemu\\qemu-system-x86_64.exe&quot; -m 1024 -smp 2 -k en-gb -boot d -cdrom &quot;$(MSBuildProjectDirectory)\$(NativeOutputPath)$(TargetName).iso&quot; -d guest_errors -serial stdio -device AC97 -rtc base=localtime"></Exec>
+  </Target>
+
+  <ItemGroup>
+	  <PackageReference Include="Microsoft.DotNet.ILCompiler" Version="7.0.0-*" />
+  </ItemGroup>
+
+  <!-- The project file pretends this is .NET, but it's not .NET. Remove all assembly references the .NET SDK added. -->
+  <Target Name="CustomizeReferences" BeforeTargets="BeforeCompile" AfterTargets="FindReferenceAssembliesForReferences">
+    <ItemGroup>
+      <ReferencePathWithRefAssemblies Remove="@(ReferencePathWithRefAssemblies)" />
+      <ReferencePath Remove="@(ReferencePath)" />
+    </ItemGroup>
+  </Target>
+
+  <!-- The AOT compiler would want to mirror these as AppContext switches. Prevent that. -->
+  <Target Name="RemoveHostConfigurationOptions" BeforeTargets="WriteIlcRspFileForCompilation" DependsOnTargets="PrepareForILLink">
+    <ItemGroup>
+      <RuntimeHostConfigurationOption Remove="@(RuntimeHostConfigurationOption)" />
+    </ItemGroup>
+  </Target>
+
+</Project>
