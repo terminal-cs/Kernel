@@ -7,10 +7,7 @@ unsafe class Program
     {
         while (true)
         {
-            for (int I = 0; I < 20 * 80; I++)
-            {
-                *((ulong*)0xb8000 + I) = 0;
-            }
+            System.Console.WriteLine("Hello, World!");
         }
     }
 }

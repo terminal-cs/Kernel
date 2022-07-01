@@ -32,6 +32,10 @@
             }
             Write('\n');
         }
+        public static void WriteLine()
+        {
+            Write('\n');
+        }
         public static void Write(string String)
         {
             for (int I = 0; I < String.Length; I++)
